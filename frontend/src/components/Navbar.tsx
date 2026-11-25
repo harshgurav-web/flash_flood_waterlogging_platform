@@ -12,9 +12,14 @@ import {
   Construction,
   Sliders,
   HelpCircle,
-  Globe
+  Globe,
+  User,
+  LogIn,
+  LogOut
 } from 'lucide-react';
 import { useTranslation, type Language } from '../services/LanguageContext';
+import { useAuth } from '../services/AuthContext';
+import { AuthModal } from './AuthModal';
 
 interface NavbarProps {
   currentTab: string;
@@ -49,6 +54,23 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { language, setLanguage, t } = useTranslation();
+  const { user, logout } = useAuth();
+
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+
+  const openLogin = () => {
+    setAuthMode('login');
+    setIsAuthModalOpen(true);
+  };
+
+  const openRegister = () => {
+    setAuthMode('register');
+    setIsAuthModalOpen(true);
+  };
+
+  const firstName = user ? (user.name.trim().split(' ')[0] || user.name) : '';
+  const initial = firstName ? firstName.charAt(0).toUpperCase() : '';
 
   const navTabs = [
     { id: 'home', label: t.navHome, icon: Home },
@@ -260,6 +282,41 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Radio className={`w-3.5 h-3.5 ${currentTab === 'response-center' ? 'text-sky-400' : 'text-slate-500'}`} />
             <span>{t.navAuthority}</span>
           </button>
+
+          {/* User Auth Section */}
+          {user ? (
+            <div className="flex items-center gap-2 pl-1 border-l border-slate-200">
+              <div
+                className="flex items-center gap-2 px-2.5 py-1.5 bg-slate-900 text-white rounded-xl border border-slate-700 shadow-xs cursor-default select-none"
+                title={`Logged in as ${user.name} (${user.email})`}
+              >
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-sky-400 text-white flex items-center justify-center font-black text-xs font-mono shadow-xs">
+                  {initial}
+                </div>
+                <span className="text-xs font-bold font-mono text-slate-200 hidden xl:inline">
+                  {firstName}
+                </span>
+              </div>
+              <button
+                onClick={logout}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-red-50 text-slate-700 hover:text-red-600 border border-slate-300 hover:border-red-200 rounded-xl text-xs font-bold transition cursor-pointer"
+                title="Logout from JalRakshak"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden xl:inline">Logout</span>
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 pl-1 border-l border-slate-200">
+              <button
+                onClick={openLogin}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer font-mono"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Login / Register</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Mobile Hamburger Toggle & Quick Report */}
@@ -399,7 +456,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </div>
 
-          <div className="pt-2 border-t border-slate-100">
+          <div className="pt-2 border-t border-slate-100 space-y-2">
             <button
               onClick={() => {
                 setCurrentTab('response-center');
@@ -415,9 +472,51 @@ export const Navbar: React.FC<NavbarProps> = ({
                 EOC
               </span>
             </button>
+
+            {user ? (
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-100 border border-slate-200 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-sky-400 text-white flex items-center justify-center font-black font-mono">
+                    {initial}
+                  </div>
+                  <div>
+                    <span className="font-bold text-slate-900 block">{user.name}</span>
+                    <span className="text-[10px] text-slate-500 block font-mono">{user.email}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    logout();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xs flex items-center gap-1 cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Logout</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  openLogin();
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold font-mono transition flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>LOGIN / REGISTER</span>
+              </button>
+            )}
           </div>
         </div>
       )}
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        initialMode={authMode}
+      />
     </header>
   );
 };

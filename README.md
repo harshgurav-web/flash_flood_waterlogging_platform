@@ -17,7 +17,7 @@ JalRakshak is an AI-powered disaster intelligence platform that transforms real-
 - 🚨 **Decision Support** — Converts risk intelligence into prioritized response actions
 
 ## 🏗️ Tech Stack
-`React 19` · `TypeScript` · `Vite` · `Tailwind CSS` · `Leaflet` · `OpenStreetMap` · `FastAPI` · `Python` · `Machine Learning` · `SHAP`
+`React 19` · `TypeScript` · `Vite` · `Tailwind CSS` · `Leaflet` · `OpenStreetMap` · `FastAPI` · `Node.js` · `Express` · `MongoDB` · `Machine Learning` · `SHAP`
 
 ## 💡 How It Works
 ```text
@@ -32,3 +32,4 @@ SHAP → WHY?
 SIMULATOR → WHAT IF?
       ↓
 DECISION SUPPORT → WHAT NOW?
+```

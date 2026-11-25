@@ -21,6 +21,9 @@ import {
   Loader2
 } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { useAuth } from '../services/AuthContext';
+import { AuthModal } from './AuthModal';
+import { SmsAlertConfirmationModal } from './SmsAlertConfirmationModal';
 
 interface ScenarioSimulatorProps {
   locations: LocationData[];
@@ -183,6 +186,106 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({
     zoneName: string;
     radiusKm: number;
   } | null>(null);
+
+  // Authenticated Traccar SMS Alert Generator States
+  const { user } = useAuth();
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    isOpen: boolean;
+    type: 'flash_flood' | 'waterlogging';
+  } | null>(null);
+
+  type SmsButtonState = 'idle' | 'loading' | 'success' | 'failure';
+  const [ffSmsState, setFfSmsState] = useState<SmsButtonState>('idle');
+  const [ffSmsFeedback, setFfSmsFeedback] = useState<{ success: boolean; message: string; recipient?: string } | null>(null);
+
+  const [swSmsState, setSwSmsState] = useState<SmsButtonState>('idle');
+  const [swSmsFeedback, setSwSmsFeedback] = useState<{ success: boolean; message: string; recipient?: string } | null>(null);
+
+  const handleOpenSmsConfirmation = (type: 'flash_flood' | 'waterlogging') => {
+    if (!user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    setConfirmModalConfig({ isOpen: true, type });
+  };
+
+  const handleConfirmSendSms = async () => {
+    if (!confirmModalConfig || !user) return;
+    const isFf = confirmModalConfig.type === 'flash_flood';
+    const currentType = confirmModalConfig.type;
+    setConfirmModalConfig(null);
+
+    if (isFf) {
+      setFfSmsState('loading');
+      setFfSmsFeedback(null);
+    } else {
+      setSwSmsState('loading');
+      setSwSmsFeedback(null);
+    }
+
+    const payload = isFf
+      ? {
+          type: 'flash_flood' as const,
+          rainfall: rainfall,
+          soilMoisture: soilMoisture,
+          waterLevel: riverWaterLevel,
+          risk: ffResult.riskLevel,
+          locationName: targetFfLocation.name,
+        }
+      : {
+          type: 'waterlogging' as const,
+          rainfall: localRainfall,
+          drainageRisk: drainageResponse || drainageCondition,
+          diagnosis: swResult.cause,
+          risk: swResult.status,
+          roadName: selectedRoadName,
+        };
+
+    try {
+      const result = await apiClient.triggerDisasterSmsAlert(payload);
+      if (result.success) {
+        if (isFf) {
+          setFfSmsState('success');
+          setFfSmsFeedback({
+            success: true,
+            message: result.message,
+            recipient: result.recipient || user.phone,
+          });
+        } else {
+          setSwSmsState('success');
+          setSwSmsFeedback({
+            success: true,
+            message: result.message,
+            recipient: result.recipient || user.phone,
+          });
+        }
+      } else {
+        if (isFf) {
+          setFfSmsState('failure');
+          setFfSmsFeedback({
+            success: false,
+            message: result.message || 'SMS gateway is unavailable. Make sure the Android gateway is running and connected to the same network.',
+          });
+        } else {
+          setSwSmsState('failure');
+          setSwSmsFeedback({
+            success: false,
+            message: result.message || 'SMS gateway is unavailable. Make sure the Android gateway is running and connected to the same network.',
+          });
+        }
+      }
+    } catch (err: any) {
+      const errMsg = 'SMS gateway is unavailable. Make sure the Android gateway is running and connected to the same network.';
+      if (isFf) {
+        setFfSmsState('failure');
+        setFfSmsFeedback({ success: false, message: errMsg });
+      } else {
+        setSwSmsState('failure');
+        setSwSmsFeedback({ success: false, message: errMsg });
+      }
+    }
+  };
 
   // Handle Generate Flash Flood Warning
   const handleGenerateFlashFloodWarning = async () => {
@@ -544,22 +647,40 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({
                   <ArrowRight className="w-4 h-4" />
                 </button>
 
-                {/* 🚨 DEMO BUTTON: TRIGGER FLOOD ALERT */}
+                {/* 🚨 Alert Generator Button (Traccar Android SMS Gateway) */}
                 <button
                   type="button"
-                  onClick={handleTriggerFloodAlert}
-                  disabled={isTriggeringAlert}
-                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-700 text-white rounded-xl text-xs font-black font-mono transition flex items-center gap-2 cursor-pointer shadow-md shadow-red-900/30 animate-pulse"
+                  onClick={() => handleOpenSmsConfirmation('flash_flood')}
+                  disabled={ffSmsState === 'loading'}
+                  className={`px-5 py-2.5 rounded-xl text-xs font-black font-mono transition flex items-center gap-2 cursor-pointer shadow-md ${
+                    ffSmsState === 'loading'
+                      ? 'bg-slate-700 text-white cursor-wait'
+                      : ffSmsState === 'success'
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      : ffSmsState === 'failure'
+                      ? 'bg-red-800 hover:bg-red-900 text-white'
+                      : 'bg-red-600 hover:bg-red-700 text-white shadow-red-900/30'
+                  }`}
                 >
-                  {isTriggeringAlert ? (
+                  {ffSmsState === 'loading' ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>DISPATCHING FCM...</span>
+                      <span>Sending...</span>
+                    </>
+                  ) : ffSmsState === 'success' ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>✓ Demo SMS Sent</span>
+                    </>
+                  ) : ffSmsState === 'failure' ? (
+                    <>
+                      <AlertTriangle className="w-4 h-4" />
+                      <span>⚠ SMS Failed</span>
                     </>
                   ) : (
                     <>
                       <ShieldAlert className="w-4 h-4" />
-                      <span>🚨 TRIGGER FLOOD ALERT</span>
+                      <span>🚨 Alert Generator</span>
                     </>
                   )}
                 </button>
@@ -573,35 +694,74 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({
               )}
             </div>
 
-            {/* 🚨 Emergency Alert Triggered Feedback Card */}
-            {fcmTriggerResult && (
-              <div className="mt-3 p-4 bg-red-950/90 border-2 border-red-500 rounded-2xl text-white font-mono space-y-2 animate-in fade-in duration-200">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-black text-red-300 flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-red-400 animate-ping" />
-                    <span>🚨 Emergency Alert Triggered</span>
+              {/* 🚨 Emergency Alert Triggered Feedback Card */}
+              {fcmTriggerResult && (
+                <div className="mt-3 p-4 bg-red-950/90 border-2 border-red-500 rounded-2xl text-white font-mono space-y-2 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-black text-red-300 flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-400 animate-ping" />
+                      <span>🚨 Emergency Alert Triggered</span>
+                    </div>
+                    <span className="text-[10px] bg-red-500/20 text-red-300 border border-red-500/30 px-2 py-0.5 rounded-full">
+                      FCM BROADCAST
+                    </span>
                   </div>
-                  <span className="text-[10px] bg-red-500/20 text-red-300 border border-red-500/30 px-2 py-0.5 rounded-full">
-                    FCM BROADCAST
-                  </span>
-                </div>
 
-                <div className="text-xs text-slate-300">
-                  Target Risk Zone: <b>{fcmTriggerResult.zoneName}</b> ({fcmTriggerResult.radiusKm} km radius)
-                </div>
+                  <div className="text-xs text-slate-300">
+                    Target Risk Zone: <b>{fcmTriggerResult.zoneName}</b> ({fcmTriggerResult.radiusKm} km radius)
+                  </div>
 
-                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-red-800/80">
-                  <div className="bg-red-900/40 p-2.5 rounded-xl border border-red-800/50">
-                    <span className="text-[10px] text-red-300 block uppercase">Users in Risk Zone:</span>
-                    <span className="text-lg font-black text-white">{fcmTriggerResult.usersInRiskZone}</span>
-                  </div>
-                  <div className="bg-red-900/40 p-2.5 rounded-xl border border-red-800/50">
-                    <span className="text-[10px] text-red-300 block uppercase">Notifications Sent:</span>
-                    <span className="text-lg font-black text-emerald-400">{fcmTriggerResult.notificationsSent}</span>
+                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-red-800/80">
+                    <div className="bg-red-900/40 p-2.5 rounded-xl border border-red-800/50">
+                      <span className="text-[10px] text-red-300 block uppercase">Users in Risk Zone:</span>
+                      <span className="text-lg font-black text-white">{fcmTriggerResult.usersInRiskZone}</span>
+                    </div>
+                    <div className="bg-red-900/40 p-2.5 rounded-xl border border-red-800/50">
+                      <span className="text-[10px] text-red-300 block uppercase">Notifications Sent:</span>
+                      <span className="text-lg font-black text-emerald-400">{fcmTriggerResult.notificationsSent}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+
+              {/* Flash Flood SMS Trigger Feedback Card */}
+              {ffSmsFeedback && (
+                <div className={`mt-3 p-4 rounded-2xl border font-mono space-y-1.5 animate-in fade-in duration-200 ${
+                  ffSmsFeedback.success
+                    ? 'bg-emerald-950/90 border-emerald-500 text-emerald-100'
+                    : 'bg-red-950/90 border-red-500 text-red-100'
+                }`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2 font-black">
+                      {ffSmsFeedback.success ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          <span>✓ Demo SMS Sent via Traccar Gateway</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="w-4 h-4 text-red-400" />
+                          <span>⚠ SMS Failed</span>
+                        </>
+                      )}
+                    </div>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                      ffSmsFeedback.success
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                        : 'bg-red-500/20 text-red-300 border-red-500/30'
+                    }`}>
+                      SIMULATION / DEMO — NOT A REAL EMERGENCY ALERT
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-300">
+                    {ffSmsFeedback.success ? (
+                      <span>Delivered demo SMS to registered phone: <b className="text-white">{ffSmsFeedback.recipient || user?.phone}</b></span>
+                    ) : (
+                      <span>{ffSmsFeedback.message}</span>
+                    )}
+                  </div>
+                </div>
+              )}
           </div>
         </div>
       )}
@@ -865,16 +1025,56 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({
               {tr('ACTION:')} <b className="text-slate-900">{tr(swResult.action)}</b>
             </div>
 
-            {/* Generate Waterlogging Alert Button */}
+            {/* Generate Waterlogging Alert Button & 🚨 Alert Generator Button */}
             <div className="pt-2 flex flex-wrap items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={handleGenerateWaterloggingAlert}
-                className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer shadow-sm"
-              >
-                <span>{tr('GENERATE WATERLOGGING ALERT')}</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleGenerateWaterloggingAlert}
+                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer shadow-sm"
+                >
+                  <span>{tr('GENERATE WATERLOGGING ALERT')}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+
+                {/* 🚨 Alert Generator Button (Traccar Android SMS Gateway) */}
+                <button
+                  type="button"
+                  onClick={() => handleOpenSmsConfirmation('waterlogging')}
+                  disabled={swSmsState === 'loading'}
+                  className={`px-5 py-2.5 rounded-xl text-xs font-black font-mono transition flex items-center gap-2 cursor-pointer shadow-md ${
+                    swSmsState === 'loading'
+                      ? 'bg-slate-700 text-white cursor-wait'
+                      : swSmsState === 'success'
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      : swSmsState === 'failure'
+                      ? 'bg-red-800 hover:bg-red-900 text-white'
+                      : 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-900/30'
+                  }`}
+                >
+                  {swSmsState === 'loading' ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Sending...</span>
+                    </>
+                  ) : swSmsState === 'success' ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>✓ Demo SMS Sent</span>
+                    </>
+                  ) : swSmsState === 'failure' ? (
+                    <>
+                      <AlertTriangle className="w-4 h-4" />
+                      <span>⚠ SMS Failed</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldAlert className="w-4 h-4" />
+                      <span>🚨 Alert Generator</span>
+                    </>
+                  )}
+                </button>
+              </div>
 
               {swAlertGenerated && (
                 <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
@@ -883,6 +1083,45 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Street Waterlogging SMS Trigger Feedback Card */}
+            {swSmsFeedback && (
+              <div className={`mt-3 p-4 rounded-2xl border font-mono space-y-1.5 animate-in fade-in duration-200 ${
+                swSmsFeedback.success
+                  ? 'bg-emerald-950/90 border-emerald-500 text-emerald-100'
+                  : 'bg-red-950/90 border-red-500 text-red-100'
+              }`}>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2 font-black">
+                    {swSmsFeedback.success ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        <span>✓ Demo SMS Sent via Traccar Gateway</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle className="w-4 h-4 text-red-400" />
+                        <span>⚠ SMS Failed</span>
+                      </>
+                    )}
+                  </div>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                    swSmsFeedback.success
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                      : 'bg-red-500/20 text-red-300 border-red-500/30'
+                  }`}>
+                    SIMULATION / DEMO — NOT A REAL EMERGENCY ALERT
+                  </span>
+                </div>
+                <div className="text-xs text-slate-300">
+                  {swSmsFeedback.success ? (
+                    <span>Delivered demo SMS to registered phone: <b className="text-white">{swSmsFeedback.recipient || user?.phone}</b></span>
+                  ) : (
+                    <span>{swSmsFeedback.message}</span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* LIVE INVERSE HYDRAULIC DIAGNOSIS ENGINE CARD */}
@@ -911,6 +1150,42 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({
           </div>
         </div>
       )}
+      {/* SMS Alert Confirmation Modal */}
+      {confirmModalConfig && confirmModalConfig.isOpen && (
+        <SmsAlertConfirmationModal
+          isOpen={confirmModalConfig.isOpen}
+          onClose={() => setConfirmModalConfig(null)}
+          onConfirm={handleConfirmSendSms}
+          isSending={confirmModalConfig.type === 'flash_flood' ? ffSmsState === 'loading' : swSmsState === 'loading'}
+          type={confirmModalConfig.type}
+          userName={user?.name || 'Registered Citizen'}
+          userPhone={user?.phone || ''}
+          details={
+            confirmModalConfig.type === 'flash_flood'
+              ? {
+                  risk: ffResult.riskLevel,
+                  rainfall: rainfall,
+                  soilMoisture: soilMoisture,
+                  waterLevel: riverWaterLevel,
+                  locationName: targetFfLocation.name,
+                }
+              : {
+                  risk: swResult.status,
+                  rainfall: localRainfall,
+                  drainageRisk: drainageResponse || drainageCondition,
+                  diagnosis: swResult.cause,
+                  roadName: selectedRoadName,
+                }
+          }
+        />
+      )}
+
+      {/* Auth Modal for Unauthenticated Users */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        initialMode="login"
+      />
     </div>
   );
 };

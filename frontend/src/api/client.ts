@@ -941,6 +941,62 @@ export const apiClient = {
         notificationsSent: 1,
         results: [{ user: 'Registered Citizen', insideZone: true }]
       };
+    },
+
+    async triggerDisasterSmsAlert(payload: {
+      type: 'flash_flood' | 'waterlogging';
+      rainfall?: number;
+      soilMoisture?: number;
+      waterLevel?: string;
+      risk?: string;
+      drainageRisk?: string;
+      diagnosis?: string;
+      roadName?: string;
+      locationName?: string;
+      phone?: string;
+      message?: string;
+    }): Promise<{ success: boolean; message: string; recipient?: string; type?: string }> {
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('jalrakshak_auth_token') : null;
+      if (!token) {
+        return {
+          success: false,
+          message: 'Authentication required. Please log in to send a demo SMS alert.'
+        };
+      }
+
+      try {
+        const res = await fetch('/api/alerts/trigger', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json().catch(() => null);
+
+        if (res.ok && data && data.success) {
+          return {
+            success: true,
+            message: data.message || 'Demo SMS sent successfully.',
+            recipient: data.recipient,
+            type: data.type
+          };
+        }
+
+        return {
+          success: false,
+          message: (data && data.message) || `SMS dispatch failed (HTTP ${res.status}).`
+        };
+      } catch (err: any) {
+        console.warn('[ApiClient] SMS alert trigger error:', err);
+        return {
+          success: false,
+          message: 'SMS gateway is unavailable. Make sure the Android gateway is running and connected to the same network.'
+        };
+      }
     }
   };
+
 

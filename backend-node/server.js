@@ -168,12 +168,13 @@ let UserModel = null;
 const inMemoryUsers = new Map(); // fallback memory store keyed by phone
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/resq_flood';
+const MONGODB_DISPLAY = MONGODB_URI.replace(/:([^@]+)@/, ':****@'); // mask password in logs
 
 mongoose.connect(MONGODB_URI, {
-  serverSelectionTimeoutMS: 2000
+  serverSelectionTimeoutMS: 10000
 }).then(() => {
   isMongoConnected = true;
-  console.log('🍃 [MongoDB] Connected to database at', MONGODB_URI);
+  console.log('🍃 [MongoDB] Connected →', MONGODB_DISPLAY);
 
   const UserSchema = new mongoose.Schema({
     name: { type: String, required: true },
@@ -185,9 +186,12 @@ mongoose.connect(MONGODB_URI, {
   });
 
   UserModel = mongoose.model('User', UserSchema);
+  console.log('🍃 [MongoDB] UserModel ready.');
 }).catch((err) => {
-  console.log('ℹ️  [MongoDB] Not connected (' + err.message + '). Operating with in-memory store for instant demonstration.');
+  console.warn('⚠️  [MongoDB] Connection failed:', err.message);
+  console.warn('   Using in-memory store as fallback. Data will not persist across restarts.');
 });
+
 
 // Helper to save or update user
 async function saveOrUpdateUser(userData) {

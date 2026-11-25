@@ -19,7 +19,11 @@ export default defineConfig({
         changeOrigin: true
       },
       '/api/alerts': {
-        target: 'http://127.0.0.1:5000',
+        target: 'http://127.0.0.1:5001',
+        changeOrigin: true
+      },
+      '/api/auth': {
+        target: 'http://127.0.0.1:5001',
         changeOrigin: true
       },
       '/api': {

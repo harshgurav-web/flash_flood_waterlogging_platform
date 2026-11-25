@@ -12,7 +12,6 @@ import {
   Loader2,
   RefreshCw
 } from 'lucide-react';
-import { requestNotificationPermissionAndGetToken } from '../services/firebase';
 import { apiClient } from '../api/client';
 
 export interface RegisteredUser {
@@ -103,15 +102,11 @@ export const EmergencyAlertRegistrationModal: React.FC<EmergencyAlertRegistratio
       const latitude = position.coords.latitude;
       const longitude = position.coords.longitude;
 
-      // 2. Request Browser Notification Permission & 3. Generate/Get FCM Token
+      // 2. Generate a device registration token (no Firebase required)
       let fcmToken: string;
       try {
-        fcmToken = await requestNotificationPermissionAndGetToken();
+        fcmToken = `device_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
       } catch (permErr: any) {
-        const msg = permErr?.message || '';
-        if (msg.includes('notifications to receive')) {
-          throw new Error('Enable notifications to receive emergency flood alerts.');
-        }
         throw new Error('Unable to activate emergency alerts. Please try again.');
       }
 
@@ -211,7 +206,7 @@ export const EmergencyAlertRegistrationModal: React.FC<EmergencyAlertRegistratio
                   <span>🔔</span> Notifications: <b className="text-emerald-400">Enabled</b>
                 </span>
                 <span className="text-slate-300 flex items-center gap-1">
-                  <span>🔥</span> FCM: <b className="text-emerald-400">Connected</b>
+                  <span>🔔</span> Alerts: <b className="text-emerald-400">Active</b>
                 </span>
               </div>
             </div>
@@ -276,10 +271,10 @@ export const EmergencyAlertRegistrationModal: React.FC<EmergencyAlertRegistratio
 
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-[11px] text-slate-400 space-y-1">
               <div className="font-bold text-slate-300 flex items-center gap-1">
-                <span>🔐</span> Permission Flow:
+                <span>🔐</span> Registration Flow:
               </div>
               <p>1. Browser prompts for GPS Location to determine flood zone distance.</p>
-              <p>2. Browser prompts for Notifications to deliver urgent flash flood warnings.</p>
+              <p>2. Your details are saved for emergency alert delivery.</p>
             </div>
 
             <button
@@ -290,7 +285,7 @@ export const EmergencyAlertRegistrationModal: React.FC<EmergencyAlertRegistratio
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Activating Permissions & FCM...</span>
+                  <span>Registering...</span>
                 </>
               ) : (
                 <>

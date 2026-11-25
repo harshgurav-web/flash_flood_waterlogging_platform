@@ -1,6 +1,15 @@
 export type RiskLevel = 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
 export * from './hospital';
 
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  location?: string;
+}
+
+
 export interface DrainageManholeRecord {
   sr_no: number;
   sewer_stretch_location: string;
